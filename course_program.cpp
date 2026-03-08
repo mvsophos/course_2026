@@ -4,29 +4,29 @@
 #include <vector>
 
 // Класс для решения задачи методом конечных элементов
-class FEMSolver {
+class Ritz {
    private:
     int N;                         // количество элементов
     double h;                      // шаг сетки
     std::vector<double> x_nodes;   // узлы сетки
     std::vector<double> solution;  // решение в узлах
 
-    // Параметры задачи (можно менять под свою постановку)
+    // Функции для примера
     double k_func(double x) const {
-        return 1.0 + x;  // k(x) = 1 + x
+        return 1.0 + x;
     }
 
     double p_func(double x) const {
-        return 1.0;  // p(x) = 1
+        return 1.0;
     }
 
     double f_func(double x) const {
-        return 1.0;  // f(x) = 1
+        return 1.0;
     }
 
    public:
-    // Конструктор: инициализация сетки
-    FEMSolver(int num_elements) : N(num_elements) {
+    // инициализация сетки
+    Ritz(int num_elements) : N(num_elements) {
         h = 1.0 / N;
         x_nodes.resize(N + 1);
         for (int i = 0; i <= N; ++i) {
@@ -35,7 +35,7 @@ class FEMSolver {
         solution.resize(N + 1, 0.0);
     }
 
-    // Решение задачи
+    // решение задачи (точнее, задание матрицы задачи)
     void solve() {
         int n_nodes = N + 1;  // количество узлов
 
@@ -49,7 +49,7 @@ class FEMSolver {
 
         // Цикл по элементам
         for (int e = 0; e < N; ++e) {
-            int n1 = e;      // левый узел (индекс)
+            int n1 = e;      // левый  узел (индекс)
             int n2 = e + 1;  // правый узел (индекс)
             double x1 = x_nodes[n1];
             double x2 = x_nodes[n2];
@@ -123,12 +123,12 @@ class FEMSolver {
         F[0] = 0.0;
 
         // Решение системы линейных уравнений методом Гаусса
-        solveLinearSystem(A, F, solution);
+        solve_linear_system(A, F, solution);
     }
 
     // Метод Гаусса для решения СЛАУ
-    void solveLinearSystem(std::vector<std::vector<double>>& A, std::vector<double>& b,
-                           std::vector<double>& x) {
+    void solve_linear_system(std::vector<std::vector<double>>& A, std::vector<double>& b,
+                             std::vector<double>& x) {
         int n = A.size();
 
         // Прямой ход
@@ -179,21 +179,26 @@ class FEMSolver {
     }
 
     // Вывод результатов
-    void printSolution() const {
+    void print_solution() const {
         std::cout << std::fixed << std::setprecision(6);
         std::cout << "\nРешение в узлах:\n";
         std::cout << "----------------------------------------\n";
-        std::cout << "|   x    |    u(x)    |\n";
+        std::cout << "|     x     |    u(x)    |\n";
         std::cout << "----------------------------------------\n";
-        for (int i = 0; i <= N; ++i) {
+        for (int i = 0; i <= 3; ++i) {
+            std::cout << "| " << std::setw(5) << x_nodes[i] << "  | " << std::setw(10)
+                      << solution[i] << " |\n";
+        }
+        std::cout << "| " << "--------" << "  |   " << "--------" << " |\n";
+        for (int i = N - 3; i <= N; ++i) {
             std::cout << "| " << std::setw(5) << x_nodes[i] << "  | " << std::setw(10)
                       << solution[i] << " |\n";
         }
         std::cout << "----------------------------------------\n";
     }
 
-    // Получение решения в конкретной точке (линейная интерполяция)
-    double getValueAt(double x) const {
+    // получение решения в конкретной точке (кусочно-линейная интерполяция)
+    double get_value_at(double x) const {
         if (x < 0.0 || x > 1.0) return 0.0;
 
         int i = static_cast<int>(x / h);
@@ -205,27 +210,30 @@ class FEMSolver {
 };
 
 int main() {
-    // Параметры задачи
-    int N = 10;  // количество элементов (чем больше, тем точнее)
+    int N;  // в примере было 10 // количество элементов (чем больше, тем точнее)
+
+    std::cout << "Введите количество элементов (число точек):       ";
+    std::cin >> N;
 
     std::cout << "=== Решение краевой задачи методом Ритца (МКЭ) ===\n";
     std::cout << "Уравнение: -(k(x)u')' + p(x)u = f(x), x in [0,1]\n";
-    std::cout << "Условия: u(0) = 0, u'(1) = 0\n";
+    std::cout << "Условия: u(0) = 0, u'(1) = 0 (второе условие выполняется автоматически из "
+                 "интегрирования по частям)\n";
     std::cout << "Коэффициенты: k(x) = 1 + x, p(x) = 1, f(x) = 1\n";
     std::cout << "Количество элементов: " << N << "\n";
 
     // Создание и решение задачи
-    FEMSolver solver(N);
+    Ritz solver(N);
     solver.solve();
 
     // Вывод результатов
-    solver.printSolution();
+    solver.print_solution();
 
     // Дополнительно: значения в некоторых точках
-    std::cout << "\nЗначения в характерных точках:\n";
-    std::cout << "u(0.0) = " << solver.getValueAt(0.0) << "\n";
-    std::cout << "u(0.5) = " << solver.getValueAt(0.5) << "\n";
-    std::cout << "u(1.0) = " << solver.getValueAt(1.0) << "\n";
+    /* std::cout << "\nЗначения в характерных точках:\n";
+    std::cout << "u(0.0) = " << solver.get_value_at(0.0) << "\n";
+    std::cout << "u(0.5) = " << solver.get_value_at(0.5) << "\n";
+    std::cout << "u(1.0) = " << solver.get_value_at(1.0) << "\n"; */
 
     return 0;
 }
