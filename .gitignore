@@ -1,0 +1,23 @@
+# Исполняемые файлы (результат сборки)
+my_program
+*.out
+*.exe
+
+# Объектные файлы
+*.o
+*.obj
+
+# Папка настроек VS Code (скрываем всё, кроме нужных конфигов)
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json
+
+# Индексация и кэш clangd
+.clangd/
+.cache/
+compile_commands.json
+
+# Временные файлы и логи
+*.log
+*.tmp
