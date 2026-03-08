@@ -1,9 +1,9 @@
 #include <cmath>
-#include <i18n>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 
-class FEMSolver {
+class Ritz {
    private:
     int N;                         // количество элементов
     double h;                      // шаг сетки
@@ -91,7 +91,7 @@ class FEMSolver {
     }
 
    public:
-    FEMSolver(int num_elements) : N(num_elements) {
+    Ritz(int num_elements) : N(num_elements) {
         h = 1.0 / N;
         x_nodes.resize(N + 1);
         for (int i = 0; i <= N; ++i) {
@@ -197,22 +197,38 @@ class FEMSolver {
 
     void printSolution() const {
         std::cout << "Решение методом Ритца:\n";
-        std::cout << "u_h(x) = sum(α_j * φ_j^h(x))\n\n";
-        std::cout << "Коэффициенты разложения α_j (значения в узлах):\n";
+        std::cout << "u_h(x) = sum(альфа_j * φ_j^h(x))\n\n";
+        std::cout << "Коэффициенты разложения альфа_j (значения в узлах):\n";
         for (int i = 0; i <= N; ++i) {
-            std::cout << "α_" << i << " = u(" << x_nodes[i] << ") = " << std::fixed
-                      << std::setprecision(6) << solution[i] << "\n";
+            if (i < 3 || i > N - 3) {
+                std::cout << "альфа_" << i << " = u(" << x_nodes[i] << ") = " << std::fixed
+                          << std::setprecision(6) << solution[i] << "\n";
+            }
+            if (i == 3) {
+                std::cout << "---------------\n";
+            }
         }
     }
 };
 
+/*
+A[i][j] = (Lφ_j^h, φ_i^h) - глобальная матрица
+F[i] = (f, φ_i^h)         - глобальный вектор
+
+Решение:
+u^h = \sum α_j φ_j^h, где α_j - решение системы
+*/
+
 int main() {
-    int N = 10;  // количество элементов
+    int N;  // количество элементов
+
+    std::cout << "Введите N:   ";
+    std::cin >> N;
 
     std::cout << "МЕТОД РИТЦА ДЛЯ УРАВНЕНИЯ: -(k(x)u')' + p(x)u = f(x)\n";
     std::cout << "Граничные условия: u(0) = 0, u'(1) = 0\n\n";
 
-    FEMSolver solver(N);
+    Ritz solver(N);
     solver.solve();
     solver.printSolution();
 
