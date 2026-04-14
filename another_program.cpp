@@ -83,31 +83,32 @@ double skalar_without_differential(int i, int j, double h, int M) {
         return 0;
 }
 
+struct common_params {
+    double tau, h;
+    int N, M;
+    // M - это число отрезков, а точек на одну больше
+
+    common_params(int _N, double _tau, int _M, double _h) : N(_N), tau(_tau), M(_M), h(_h) {}
+};
+
 class func {
    public:
     std::vector<double> c_i;
-    double m_tau, m_h;
-    int m_M;  // это количество точек на 1 больше.
+    const common_params& m_params;
 
-    func(double tau, double h, int M) {
+    func(const common_params& parameters) : m_params(parameters) {
         double default_value = 1;
-        m_tau = tau;
-        m_h = h;
-        m_M = M;
-        for (int i = 0; i <= m_M; i++) {
+        for (int i = 0; i <= m_params.M; i++) {
             c_i.push_back(default_value);
         }
     }
 
-    func(std::vector<double> vec, double tau, double h, int M) {
-        if (static_cast<int>(vec.size()) != M + 1) {
+    func(std::vector<double> vec, const common_params& parameters) : m_params(parameters) {
+        if (static_cast<int>(vec.size()) != m_params.M + 1) {
             std::cout << "Это какой-то неправильный вектор. Он имеет размер " << vec.size()
-                      << ", а должен " << M + 1 << " \n";
+                      << ", а должен " << m_params.M + 1 << " \n";
         }
-        m_tau = tau;
-        m_h = h;
-        m_M = M;
-        for (int i = 0; i <= m_M; i++) {
+        for (int i = 0; i <= m_params.M; i++) {
             c_i.push_back(vec[i]);
         }
     }
@@ -115,9 +116,9 @@ class func {
     ~func() = default;
 
     double approx(double x) {
-        int index = static_cast<int>(x / m_h);
-        if (index == m_M) return c_i[m_M];
-        double buffer = x - index * m_h;
+        int index = static_cast<int>(x / m_params.h);
+        if (index == m_params.M) return c_i[m_params.M];
+        double buffer = x - index * m_params.h;
         return c_i[index] * (1 - buffer) + c_i[index + 1] * buffer;
     }
 };
@@ -129,8 +130,10 @@ struct equation {
     double above_diag;
     double right_part;
 
-    int N, M;
-    double tau, h;
+    const common_params& m_params;
+
+    equation(int number, const common_params& parameters)
+        : num_of_eq(number), m_params(parameters) {}
 
     void normalize_eq() {
         if (!(std::abs(below_diag) < eps)) {
@@ -145,55 +148,69 @@ struct equation {
     }
 
     void init_equation(const func& u /* значения прошлой функции в точках интерполяции */,
-                       int num /* номер уравнения от 0 до M*/, int M /* количество отрезков */) {
-        auto function_of_coefficient = [&u, M](int i, int j) {
+                       int num /* номер уравнения от 0 до M*/) {
+        auto function_of_coefficient = [&u, this](int i, int j) {
             if (i == 0)
-                return u.c_i[i] * skalar_of_differential(i, j, i, M) +
-                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, M);
+                return u.c_i[i] * skalar_of_differential(i, j, i, m_params.M) +
+                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, m_params.M);
 
-            else if (i == M)
-                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, M) +
-                       u.c_i[i] * skalar_of_differential(i, j, i, M);
+            else if (i == m_params.M)
+                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, m_params.M) +
+                       u.c_i[i] * skalar_of_differential(i, j, i, m_params.M);
 
             else
-                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, M) +
-                       u.c_i[i] * skalar_of_differential(i, j, i, M) +
-                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, M);
+                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, m_params.M) +
+                       u.c_i[i] * skalar_of_differential(i, j, i, m_params.M) +
+                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, m_params.M);
         };
 
         if (num == 0) {
             num_of_eq = num;
             below_diag = 0;
-            onthe_diag = (1. / tau) * skalar_without_differential(num, num, h, M) +
+            onthe_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num, m_params.h, m_params.M) +
                          function_of_coefficient(num, num);
-            above_diag = (1. / tau) * skalar_without_differential(num, num + 1, h, M) +
+            above_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num + 1, m_params.h, m_params.M) +
                          function_of_coefficient(num, num + 1);
             right_part =
-                (1. / tau) * (skalar_without_differential(num, num, h, M) * u.c_i[num] +
-                              skalar_without_differential(num, num + 1, h, M) * u.c_i[num + 1]);
+                (1. / m_params.tau) *
+                (skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num] +
+                 skalar_without_differential(num, num + 1, m_params.h, m_params.M) *
+                     u.c_i[num + 1]);
             ;
-        } else if (num == M) {
+        } else if (num == m_params.M) {
             num_of_eq = num;
-            below_diag = (1. / tau) * skalar_without_differential(num, num - 1, h, M) +
+            below_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num - 1, m_params.h, m_params.M) +
                          function_of_coefficient(num, num - 1);
-            onthe_diag = (1. / tau) * skalar_without_differential(num, num, h, M) +
+            onthe_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num, m_params.h, m_params.M) +
                          function_of_coefficient(num, num);
             above_diag = 0;
             right_part =
-                (1. / tau) * (skalar_without_differential(num, num - 1, h, M) * u.c_i[num - 1] +
-                              skalar_without_differential(num, num, h, M) * u.c_i[num]);
+                (1. / m_params.tau) *
+                (skalar_without_differential(num, num - 1, m_params.h, m_params.M) *
+                     u.c_i[num - 1] +
+                 skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num]);
         } else {
             num_of_eq = num;
-            below_diag = (1. / tau) * skalar_without_differential(num, num - 1, h, M) +
+            below_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num - 1, m_params.h, m_params.M) +
                          function_of_coefficient(num, num - 1);
-            onthe_diag = (1. / tau) * skalar_without_differential(num, num, h, M) +
+            onthe_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num, m_params.h, m_params.M) +
                          function_of_coefficient(num, num);
-            above_diag = (1. / tau) * skalar_without_differential(num, num + 1, h, M) +
+            above_diag = (1. / m_params.tau) *
+                             skalar_without_differential(num, num + 1, m_params.h, m_params.M) +
                          function_of_coefficient(num, num + 1);
             right_part =
-                (1. / tau) * (skalar_without_differential(num, num - 1, h, M) * u.c_i[num - 1] +
-                              skalar_without_differential(num, num, h, M) * u.c_i[num] +
-                              skalar_without_differential(num, num + 1, h, M) * u.c_i[num + 1]);
+                (1. / m_params.tau) *
+                (skalar_without_differential(num, num - 1, m_params.h, m_params.M) *
+                     u.c_i[num - 1] +
+                 skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num] +
+                 skalar_without_differential(num, num + 1, m_params.h, m_params.M) *
+                     u.c_i[num + 1]);
         }
     }
 };
@@ -226,8 +243,10 @@ void eq_below_is_eq_below_minus_eq_above(equation& eq2 /* это уравнен�
     }
 }
 
-func solver_of_matrix(std::vector<equation>& matrix, double tau, double h,
-                      int M /* это число отрезков, точек же на одну больше */) {
+func solver_of_matrix(std::vector<equation>& matrix, const common_params& parameters) {
+    const int& M = parameters.M;
+    const double &h = parameters.h, &tau = parameters.tau;
+
     if (static_cast<int>(matrix.size()) != M + 1)
         std::cout << "Короче, неправильно заданы уравнения (их должно быть M + 1)\n";
     /* номер последнего уравнения равен M */
@@ -239,7 +258,7 @@ func solver_of_matrix(std::vector<equation>& matrix, double tau, double h,
 
     matrix[M].normalize_eq();
 
-    for (int i = M; i > 0; i++) {
+    for (int i = M; i > 0; i--) {
         matrix[i].normalize_eq();
         eq_below_is_eq_below_minus_eq_above(matrix[i - 1], matrix[i]);
     }
@@ -251,7 +270,7 @@ func solver_of_matrix(std::vector<equation>& matrix, double tau, double h,
         next_approx.push_back(matrix[i].right_part);
     }
 
-    return func(next_approx, tau, h, M);
+    return func(next_approx, parameters);
 }
 
 int main() {
@@ -266,10 +285,16 @@ int main() {
                                  // одну больше, так как считаем с 0)
         double tau = T / N, h = X / M;
 
-        func u(tau, h, N);
+        common_params params(N, tau, M, h);
+        func u(params);
         std::vector<equation> matrix;
+
         // задаем матрицу, она должна быть трехдиагональной. Надо создать структуру из векторов
         // коэффициентов уравнений Имеется n+1 уравнений.
+        for (int i = 0; i <= params.M; i++) {
+            equation eq(i, params);
+            eq.init_equation(u, i);
+        }
 
     } catch (const std::exception& e) {
         std::cerr << "Стандартное исключение: " << e.what() << std::endl;
