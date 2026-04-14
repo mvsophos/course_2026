@@ -89,6 +89,8 @@ struct common_params {
     // M - это число отрезков, а точек на одну больше
 
     common_params(int _N, double _tau, int _M, double _h) : N(_N), tau(_tau), M(_M), h(_h) {}
+
+    ~common_params() = default;
 };
 
 class func {
@@ -134,6 +136,8 @@ struct equation {
 
     equation(int number, const common_params& parameters)
         : num_of_eq(number), m_params(parameters) {}
+
+    ~equation() = default;
 
     void normalize_eq() {
         if (!(std::abs(below_diag) < eps)) {
@@ -282,18 +286,24 @@ int main() {
 
         double X = 1., T = 1.;   // длина сегментов по пространству и по времени соответственно
         int N = 1000, M = 1000;  // M - это шаги по пространству, N - это шаги по времени (точек на
-                                 // одну больше, так как считаем с 0)
+        // одну больше, так как считаем с 0)
+
+        std::cout << "Введи аргументы в таком порядке:  N шагов по времени,  T отрезок времени,  M "
+                     "шагов по пространству,  X отрезок пространства.\n";
+        std::cin >> N >> T >> M >> X;
+
         double tau = T / N, h = X / M;
 
         common_params params(N, tau, M, h);
         func u(params);
-        std::vector<equation> matrix;
 
         // задаем матрицу, она должна быть трехдиагональной. Надо создать структуру из векторов
         // коэффициентов уравнений Имеется n+1 уравнений.
+        std::vector<equation> matrix;
         for (int i = 0; i <= params.M; i++) {
             equation eq(i, params);
             eq.init_equation(u, i);
+            matrix.push_back(eq);
         }
 
     } catch (const std::exception& e) {
