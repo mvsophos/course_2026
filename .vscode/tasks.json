@@ -2,11 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build",
+            "label": "Собрать проект C++",
             "type": "shell",
             "command": "g++",
-            "args": ["-g", "${file}", "-o", "${fileDirname}/${fileBasenameNoExtension}"],
-            "group": "build"
+            "args": ["-g", "${workspaceFolder}/another_program.cpp", "-o", "${workspaceFolder}/another_program.out"],
+            "group": {
+                    "kind": "build",
+                    "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
         }
     ]
 }

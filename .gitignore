@@ -1,5 +1,7 @@
 # Исполняемые файлы (результат сборки)
 my_program
+another_program
+diagonal_program
 *.out
 *.exe
 
