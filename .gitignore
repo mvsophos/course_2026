@@ -4,6 +4,9 @@ another_program
 diagonal_program
 *.out
 *.exe
+*.png
+Riemann-Solvers-master/*
+*.txt
 
 # Объектные файлы
 *.o

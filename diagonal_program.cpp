@@ -25,6 +25,51 @@ void plot_two(const std::vector<double>& x, const std::vector<double>& y1,
     system("xdg-open graph.png 2>/dev/null &");
 }
 
+void plot_error_log(const std::vector<double>& x, const std::vector<double>& y1,
+                    const std::vector<double>& y2) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        // Защита от log(0)
+        if (error < 1e-300) error = 1e-300;
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    system(
+        "gnuplot -e \"set terminal png size 1200,800; "
+        "set output 'graph_error_log_graph.png'; "
+        "set xlabel 'x'; "
+        "set ylabel '|Numerical - Exact|'; "
+        "set title 'Absolute Error (log scale)'; "
+        "set grid; "
+        "set logscale y; "
+        "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"");
+    system("xdg-open graph_error_log_graph.png 2>/dev/null &");
+}
+
+void plot_error(const std::vector<double>& x, const std::vector<double>& y1,
+                const std::vector<double>& y2) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        // Защита от log(0)
+        if (error < 1e-300) error = 1e-300;
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    system(
+        "gnuplot -e \"set terminal png size 1200,800; "
+        "set output 'graph_error_graph.png'; "
+        "set xlabel 'x'; "
+        "set ylabel '|Numerical - Exact|'; "
+        "set title 'Absolute Error (log scale)'; "
+        "set grid; "
+        "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"");
+    system("xdg-open graph_error_graph.png 2>/dev/null &");
+}
+
 struct common_params {
     double tau, h;
     int N, M;
@@ -43,7 +88,7 @@ struct common_params {
 
 double eps = 1e-12;
 
-int function_type = 0;
+int function_type = 1;
 
 // неправильно решение задал. Это не решение уравнения
 double accuracy_right_part(double t, double x) {
@@ -51,6 +96,8 @@ double accuracy_right_part(double t, double x) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * M_PI * x)) *
                    (1 - 3 * M_PI * std::exp(t) * std::sin(3 * M_PI * x));
+        case 1:
+            return 0;
     }
     return 0;
 }
@@ -59,6 +106,8 @@ double accuracy_u(double t, double x) {
     switch (function_type) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * M_PI * x));
+        case 1:
+            return (x > 0.2 && x < 0.4) ? 1 : 0;
     }
     return 0;
 }
@@ -249,6 +298,12 @@ int main() {
 
         plot_two(params.get_vector_OX(), u.c_i,
                  func(init_vector_of_function_u_value(N, params), params).c_i);
+
+        plot_error_log(params.get_vector_OX(), u.c_i,
+                       func(init_vector_of_function_u_value(N, params), params).c_i);
+
+        plot_error(params.get_vector_OX(), u.c_i,
+                   func(init_vector_of_function_u_value(N, params), params).c_i);
 
         // std::system("xdg-open graph.png");
 

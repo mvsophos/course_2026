@@ -5,12 +5,19 @@
             "label": "Собрать проект C++",
             "type": "shell",
             "command": "g++",
-            "args": ["-g", "${workspaceFolder}/another_program.cpp", "-o", "${workspaceFolder}/another_program.out"],
+            "args": [
+                "-g",
+                "${workspaceFolder}/diagonal_program.cpp",
+                "-o",
+                "${workspaceFolder}/diagonal_program.out"
+            ],
             "group": {
-                    "kind": "build",
-                    "isDefault": true
+                "kind": "build",
+                "isDefault": true
             },
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": [
+                "$gcc"
+            ]
         }
     ]
 }
