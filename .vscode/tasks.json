@@ -7,9 +7,11 @@
             "command": "g++",
             "args": [
                 "-g",
-                "${workspaceFolder}/diagonal_program.cpp",
+                //"${workspaceFolder}/diagonal_program.cpp",
+                "${workspaceFolder}/another_program.cpp",
                 "-o",
-                "${workspaceFolder}/diagonal_program.out"
+                //"${workspaceFolder}/diagonal_program.out"
+                "${workspaceFolder}/another_program.out",
             ],
             "group": {
                 "kind": "build",
