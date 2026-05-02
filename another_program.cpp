@@ -103,6 +103,78 @@ class func {
     }
 };
 
+
+
+// Ошибка в норме L∞ (maximum norm)
+double compute_L_inf_error(const func& numerical, double time) {
+    double max_error = 0.0;
+    const common_params& p = numerical.m_params;
+    
+    for (int i = 0; i <= p.M; i++) {
+        double exact = accuracy_u(time, i * p.h);
+        double error = std::abs(numerical.c_i[i] - exact);
+        if (error > max_error) max_error = error;
+    }
+    return max_error;
+}
+
+// Ошибка в норме L1 (интеграл модуля ошибки)
+// Используем составную формулу трапеций
+double compute_L1_error(const func& numerical, double time) {
+    const common_params& p = numerical.m_params;
+    double sum = 0.0;
+    
+    for (int i = 0; i <= p.M; i++) {
+        double exact = accuracy_u(time, i * p.h);
+        double error = std::abs(numerical.c_i[i] - exact);
+        
+        if (i == 0 || i == p.M)
+            sum += error / 2.0;
+        else
+            sum += error;
+    }
+    return sum * p.h;
+}
+
+// Ошибка в норме L2 (среднеквадратичная)
+// Интеграл: sqrt(\int(u_num - u_exact)^2 dx)
+// Используем точную квадратуру для кусочно-линейных функций
+double compute_L2_error(const func& numerical, double time) {
+    const common_params& p = numerical.m_params;
+    double integral_sq = 0.0;
+    
+    // Интегрируем по каждому элементу точно
+    for (int i = 0; i < p.M; i++) {
+        // Значения ошибки в узлах i и i+1
+        double uL_num = numerical.c_i[i];
+        double uR_num = numerical.c_i[i + 1];
+        double uL_ex = accuracy_u(time, i * p.h);
+        double uR_ex = accuracy_u(time, (i + 1) * p.h);
+        
+        double eL = uL_num - uL_ex;
+        double eR = uR_num - uR_ex;
+        
+        // Точный интеграл от (eL*(1-ξ) + eR*ξ)² по элементу длины h
+        // ∫₀¹ (eL(1-ξ) + eRξ)² h dξ = h*(eL² + eL*eR + eR²)/3
+        integral_sq += (p.h / 3.0) * (eL*eL + eL*eR + eR*eR);
+    }
+    
+    return std::sqrt(integral_sq);
+}
+
+// Удобная функция для вывода всех норм
+void print_all_errors(const func& numerical, double time) {
+    double L_inf = compute_L_inf_error(numerical, time);
+    double L1 = compute_L1_error(numerical, time);
+    double L2 = compute_L2_error(numerical, time);
+    
+    std::cout << " (t = " << time << "): "
+              << "L_inf = " << L_inf << ", "
+              << "L1 = " << L1 << ", "
+              << "L2 = " << L2 << "\n";
+}
+
+
 struct equation {
     int num_of_eq = -1;
     double below_diag;
@@ -160,14 +232,14 @@ struct equation {
 
         // мб лучше задать точное решение на границе, вместо коэффициентов на диагонали.
         // Это будет лучше
-        /* if (num == 0 || num == M) {
+        if (num == 0 || num == M) {
             right_part = accuracy_u((time_step + 1) * tau, num * h);
             onthe_diag = 1;
             return;
-        } */
+        }
 
-        if (num == 0) onthe_diag -= 0.5 * u.c_i[num] * tau;
-        if (num == M) onthe_diag += 0.5 * u.c_i[num] * tau;
+        /* if (num == 0) onthe_diag -= 0.5 * u.c_i[num] * tau;
+        if (num == M) onthe_diag += 0.5 * u.c_i[num] * tau; */
 
         if (num != 0) below_diag = h / 6;
         if (num != M) above_diag = h / 6;
@@ -346,14 +418,18 @@ int main() {
             u = solver_of_matrix(matrix, params);
             // тут запишем решение задачи в какой-то файл. Наверное, в виде трехмерной поверхности
             // (время / пространство / значение функции)
-            if (time_step == 0) {
+            if (time_step == 0 && false) {
                 std::cout << "\n Первое уравнение \n";
                 print_diff_vector(u.c_i,
                                   func(init_vector_of_function_u_value(1, params), params).c_i);
                 std::cout << "\n\n";
             }
         }
-        print_diff_vector(u.c_i, func(init_vector_of_function_u_value(N, params), params).c_i);
+        //print_diff_vector(u.c_i, func(init_vector_of_function_u_value(N, params), params).c_i);
+
+        std::cout << "\nОшибки\n";
+        print_all_errors(u, N * params.tau);
+        print_all_errors(u, T);
 
     } catch (int e) {
         switch (e) {

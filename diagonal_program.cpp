@@ -88,7 +88,7 @@ struct common_params {
 
 double eps = 1e-12;
 
-int function_type = 1;
+int function_type = 0;
 
 // неправильно решение задал. Это не решение уравнения
 double accuracy_right_part(double t, double x) {
