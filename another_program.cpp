@@ -8,6 +8,10 @@ class phi {};
 // надо нормальную функцию написать. Может быть вообще сделать сначала чисто метод конечных
 // элементов на один элемент, то есть на кусочно-постоянных функциях
 
+
+// РЕШАЕМ УРАВНЕНИЕ БЮРГЕРСА ВИДА:       du/dt  +  0.5 * d(u^2)/dx  =  0
+
+
 struct common_params {
     double tau, h;
     int N, M;
@@ -26,13 +30,17 @@ double accuracy_right_part(double t, double x) {
     switch (function_type) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * M_PI * x)) *
-                   (1 - 6 * M_PI * std::sin(3 * M_PI * x));
+                   (1 - 3 * M_PI * std::exp(t) * std::sin(3 * M_PI * x));
     }
     return 0;
 }
 
 double accuracy_u(double t, double x) {
-    return std::exp(t) * (1.5 + std::cos(3 * M_PI * x));
+    switch (function_type) {
+        case 0:
+            return std::exp(t) * (1.5 + std::cos(3 * M_PI * x));
+    }
+    return 0;
 }
 
 // как мне как-то проще определить как считать произвоидные для j, k. Можно сделать вектор из
@@ -40,78 +48,6 @@ double accuracy_u(double t, double x) {
 
 // i - это номер уравнения по сути (phi в произведении, которое не под дифференциалом), j и k -
 // это phi которые под дифференциалом.
-double skalar_of_differential(int i, int j, int k, int M) {
-    if (i == 0) {
-        if (k == 0 && j == 0)
-            return -2. / 3;
-        else if ((k == 0 && j == 1) || (k == 1 && j == 0))
-            return 1. / 6;
-        else if (k == 1 && j == 1)
-            return 1. / 3;
-    }
-
-    if (i == M) {
-        if (k == M && j == M)
-            return 2. / 3;
-        else if ((k == M && j == M - 1) || (k == M - 1 && j == M))
-            return -1. / 6;
-        else if (k == M - 1 && j == M - 1)
-            return -1. / 3;
-    }
-
-    if (j == i - 1) {
-        if (k == i - 1)
-            return -1. / 3;
-        else if (k == i)
-            return -1. / 6;
-        else if (k == i + 1)
-            return 0;
-        else
-            return 0;
-    } else if (j == i) {
-        if (k == i - 1)
-            return -1. / 6;
-        else if (k == i)
-            return 0;
-        else if (k == i + 1)
-            return 1. / 6;
-        else
-            return 0;
-    } else if (j == i + 1) {
-        if (k == i - 1)
-            return 0;
-        else if (k == i)
-            return 1. / 6;
-        else if (k == i + 1)
-            return 1. / 3;
-        else
-            return 0;
-    } else
-        return 0;
-}
-
-double skalar_without_differential(int i, int j, double h, int M) {
-    if (j == i + 1)
-        if (i == M)
-            return 0;
-        else
-            return (1. / 6) * h;
-
-    else if (j == i)
-        if (i == 0 || i == M)
-            return (1. / 3) * h;
-        else
-            return (2. / 3) * h;
-
-    else if (j == i - 1)
-        if (i == 0)
-            return 0;
-        else
-            return (1. / 6) * h;
-
-    else
-        return 0;
-}
 
 // Интеграл по Симпсону. Это нужно для рассчета правой части. Она берет интеграл
 double simpson_integral(double (*accuracy_func)(double /* time */, double /* spaceX */), int i,
@@ -211,75 +147,37 @@ struct equation {
     }
 
     void init_equation(const func& u /* значения прошлой функции в точках интерполяции */,
-                       int num /* номер уравнения от 0 до M*/, int time_step, bool is_default) {
-        auto function_of_coefficient = [&u, this](int i, int j) {
-            if (i == 0)
-                return u.c_i[i] * skalar_of_differential(i, j, i, m_params.M) +
-                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, m_params.M);
+                       int num /* номер уравнения от 0 до M*/, int time_step, bool is_default /* правая часть не равна нулю */) {
 
-            else if (i == m_params.M)
-                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, m_params.M) +
-                       u.c_i[i] * skalar_of_differential(i, j, i, m_params.M);
+        double h = m_params.h;
+        double tau = m_params.tau;
+        int M = m_params.M;
 
-            else
-                return u.c_i[i - 1] * skalar_of_differential(i, j, i - 1, m_params.M) +
-                       u.c_i[i] * skalar_of_differential(i, j, i, m_params.M) +
-                       u.c_i[i + 1] * skalar_of_differential(i, j, i + 1, m_params.M);
-        };
+        below_diag = h / 6;     onthe_diag = 0;     above_diag = h / 6;
+        num_of_eq = num;
 
-        if (num == 0) {
-            num_of_eq = num;
-            below_diag = 0;
-            onthe_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num);
-            above_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num + 1, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num + 1);
-            right_part =
-                (1. / m_params.tau) *
-                (skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num] +
-                 skalar_without_differential(num, num + 1, m_params.h, m_params.M) *
-                     u.c_i[num + 1]);
-            ;
-        } else if (num == m_params.M) {
-            num_of_eq = num;
-            below_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num - 1, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num - 1);
-            onthe_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num);
-            above_diag = 0;
-            right_part =
-                (1. / m_params.tau) *
-                (skalar_without_differential(num, num - 1, m_params.h, m_params.M) *
-                     u.c_i[num - 1] +
-                 skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num]);
-        } else {
-            num_of_eq = num;
-            below_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num - 1, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num - 1);
-            onthe_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num);
-            above_diag = (1. / m_params.tau) *
-                             skalar_without_differential(num, num + 1, m_params.h, m_params.M) +
-                         function_of_coefficient(num, num + 1);
-            right_part =
-                (1. / m_params.tau) *
-                (skalar_without_differential(num, num - 1, m_params.h, m_params.M) *
-                     u.c_i[num - 1] +
-                 skalar_without_differential(num, num, m_params.h, m_params.M) * u.c_i[num] +
-                 skalar_without_differential(num, num + 1, m_params.h, m_params.M) *
-                     u.c_i[num + 1]);
+        if (num != 0) {
+            below_diag += 0      +  ((-1. / 6)  *  u.c_i[num - 1]  +  (-1. / 12)   *  u.c_i[num])  *  (tau / 2);
+            onthe_diag += h / 3  +  (-1. / 12)  * (u.c_i[num - 1]  +  u.c_i[num])  *  (tau / 2);
+            above_diag += 0;
         }
-        if (is_default) {
+        if (num != M) {
+            below_diag += 0;
+            onthe_diag += h / 3  +  (1. / 12)   * (u.c_i[num]  +  u.c_i[num + 1])  *  (tau / 2);
+            above_diag += 0      +  ((1. / 12)  *  u.c_i[num]  +  (1. / 6)  *  u.c_i[num + 1])  *  (tau / 2);
+        }
+
+        if (num == 0)
+            right_part = (h / 3) * u.c_i[num] + (h / 6) * u.c_i[num + 1];
+        else if (num == M)
+            right_part = (h / 6) * u.c_i[num - 1] + (h / 3) * u.c_i[num];
+        else
+            right_part =
+                (h / 6) * u.c_i[num - 1] + (2 * h / 3) * u.c_i[num] + (h / 6) * u.c_i[num + 1];
+
+        if (is_default)
             right_part +=
                 simpson_integral(accuracy_right_part, num, time_step * m_params.tau, m_params);
-            // right_part += accuracy_right_part(time_step * m_params.tau, num * m_params.h);
-        }
     }
 };
 
@@ -417,7 +315,7 @@ int main() {
 
         printf("h=%lf, tau=%lf; M=%d, N=%d\n", params.h, params.tau, params.M, params.N);
 
-        bool _default = true;  // если истинно, то значит считаем для конкретного точного u
+        bool _default = true;  // если истинно, то значит считаем для конкретного точного u и правая часть не равна 0
         func u(init_vector_of_function_u_value(0, params), params);
 
         // задаем матрицу, она должна быть трехдиагональной. Надо создать структуру из векторов
