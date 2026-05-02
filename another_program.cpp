@@ -8,9 +8,7 @@ class phi {};
 // надо нормальную функцию написать. Может быть вообще сделать сначала чисто метод конечных
 // элементов на один элемент, то есть на кусочно-постоянных функциях
 
-
 // РЕШАЕМ УРАВНЕНИЕ БЮРГЕРСА ВИДА:       du/dt  +  0.5 * d(u^2)/dx  =  0
-
 
 struct common_params {
     double tau, h;
@@ -147,24 +145,30 @@ struct equation {
     }
 
     void init_equation(const func& u /* значения прошлой функции в точках интерполяции */,
-                       int num /* номер уравнения от 0 до M*/, int time_step, bool is_default /* правая часть не равна нулю */) {
-
+                       int num /* номер уравнения от 0 до M*/, int time_step,
+                       bool is_default /* правая часть не равна нулю */) {
         double h = m_params.h;
         double tau = m_params.tau;
         int M = m_params.M;
 
-        below_diag = h / 6;     onthe_diag = 0;     above_diag = h / 6;
         num_of_eq = num;
 
+        below_diag = 0;
+        onthe_diag = 0;
+        above_diag = 0;
+
+        if (num != 0) below_diag = h / 6;
+        if (num != M) above_diag = h / 6;
+
         if (num != 0) {
-            below_diag += 0      +  ((-1. / 6)  *  u.c_i[num - 1]  +  (-1. / 12)   *  u.c_i[num])  *  (tau / 2);
-            onthe_diag += h / 3  +  (-1. / 12)  * (u.c_i[num - 1]  +  u.c_i[num])  *  (tau / 2);
+            below_diag += 0 + ((-1. / 6) * u.c_i[num - 1] + (-1. / 12) * u.c_i[num]) * (tau / 2);
+            onthe_diag += h / 3 + (-1. / 12) * (u.c_i[num - 1] + u.c_i[num]) * (tau / 2);
             above_diag += 0;
         }
         if (num != M) {
             below_diag += 0;
-            onthe_diag += h / 3  +  (1. / 12)   * (u.c_i[num]  +  u.c_i[num + 1])  *  (tau / 2);
-            above_diag += 0      +  ((1. / 12)  *  u.c_i[num]  +  (1. / 6)  *  u.c_i[num + 1])  *  (tau / 2);
+            onthe_diag += h / 3 + (1. / 12) * (u.c_i[num] + u.c_i[num + 1]) * (tau / 2);
+            above_diag += 0 + ((1. / 12) * u.c_i[num] + (1. / 6) * u.c_i[num + 1]) * (tau / 2);
         }
 
         if (num == 0)
@@ -315,7 +319,8 @@ int main() {
 
         printf("h=%lf, tau=%lf; M=%d, N=%d\n", params.h, params.tau, params.M, params.N);
 
-        bool _default = true;  // если истинно, то значит считаем для конкретного точного u и правая часть не равна 0
+        bool _default = true;  // если истинно, то значит считаем для конкретного точного u и правая
+                               // часть не равна 0
         func u(init_vector_of_function_u_value(0, params), params);
 
         // задаем матрицу, она должна быть трехдиагональной. Надо создать структуру из векторов
