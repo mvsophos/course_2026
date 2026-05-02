@@ -2,25 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug C++",
-            "type": "cppdbg",
+            "name": "Launch with LLDB",
+            "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/another_program.out",
             "args": [],
-            "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "preLaunchTask": "Собрать проект C++",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
+            "terminal": "integrated"
         }
     ]
 }
