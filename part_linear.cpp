@@ -4,12 +4,8 @@
 #include <iostream>
 #include <vector>
 
-// Собственная константа pi, не требующая макросов
 const double PI = std::acos(-1.0);
 
-// ----------------------------------------------------------------------
-// Структура общих параметров (аналогична Вашей)
-// ----------------------------------------------------------------------
 struct common_params {
     double tau, h;
     int N;     // число шагов по времени
@@ -47,7 +43,6 @@ double accuracy_f(double t, double x) {
 
 // ----------------------------------------------------------------------
 // Класс для хранения DG-решения (кусочно-линейное)
-// ----------------------------------------------------------------------
 class DG_Solution {
    public:
     std::vector<double> u_mean;   // средние значения по элементам
@@ -81,14 +76,10 @@ class DG_Solution {
             u_slope[j] = ux * h / 2.0;  // phi_1 = 2(x-xc)/h  =>  du/dx = 2*u_slope/h
         }
     }
-
-    // Метод to_func() удалён – он не используется и требовал бы полного
-    // определения класса func из another_program.cpp.
 };
 
 // ----------------------------------------------------------------------
 // Функции ошибок (адаптированы для DG_Solution)
-// ----------------------------------------------------------------------
 double compute_L2_error(const DG_Solution& sol, double time) {
     double integral = 0.0;
     for (int j = 0; j < sol.M; ++j) {
@@ -115,7 +106,6 @@ double compute_Linf_error(const DG_Solution& sol, double time) {
 
 // ----------------------------------------------------------------------
 // Численный поток (локальный Лакса-Фридрихса)
-// ----------------------------------------------------------------------
 double llf_flux(double uL, double uR) {
     double fL = 0.5 * uL * uL;
     double fR = 0.5 * uR * uR;
@@ -125,10 +115,7 @@ double llf_flux(double uL, double uR) {
 
 // ----------------------------------------------------------------------
 // Вычисление правых частей для DG P1
-// ----------------------------------------------------------------------
-void compute_dg_rhs(const DG_Solution& u,
-                    std::vector<double>& dmean,
-                    std::vector<double>& dslope,
+void compute_dg_rhs(const DG_Solution& u, std::vector<double>& dmean, std::vector<double>& dslope,
                     bool with_source, double time) {
     int M = u.M;
     double h = u.h;
@@ -137,27 +124,27 @@ void compute_dg_rhs(const DG_Solution& u,
 
     for (int j = 0; j < M; ++j) {
         // Значения на границах элемента (внутренние)
-        double u_left  = u.u_mean[j] - u.u_slope[j];
+        double u_left = u.u_mean[j] - u.u_slope[j];
         double u_right = u.u_mean[j] + u.u_slope[j];
 
         // Внешние значения (соседние элементы или граница)
-        double u_ext_left  = (j == 0) ? accuracy_u(time, 0.0)
-                                      : u.u_mean[j-1] + u.u_slope[j-1];
-        double u_ext_right = (j == M-1) ? accuracy_u(time, u.X)
-                                        : u.u_mean[j+1] - u.u_slope[j+1];
+        double u_ext_left = (j == 0) ? accuracy_u(time, 0.0) : u.u_mean[j - 1] + u.u_slope[j - 1];
+        double u_ext_right =
+            (j == M - 1) ? accuracy_u(time, u.X) : u.u_mean[j + 1] - u.u_slope[j + 1];
 
         // Численные потоки
-        double flux_left  = llf_flux(u_ext_left, u_left);
+        double flux_left = llf_flux(u_ext_left, u_left);
         double flux_right = llf_flux(u_right, u_ext_right);
 
         // Уравнение для среднего (без источника)
         dmean[j] = -(flux_right - flux_left) / h;
 
         // Интеграл от 0.5*u^2 внутри элемента
-        double integral_f = 0.5 * h * (u.u_mean[j]*u.u_mean[j] + u.u_slope[j]*u.u_slope[j]/3.0);
+        double integral_f =
+            0.5 * h * (u.u_mean[j] * u.u_mean[j] + u.u_slope[j] * u.u_slope[j] / 3.0);
 
         // Уравнение для наклона (без источника)
-        dslope[j] = -3.0 / h * ( (flux_right + flux_left) - 2.0 / h * integral_f );
+        dslope[j] = -3.0 / h * ((flux_right + flux_left) - 2.0 / h * integral_f);
 
         // ----- добавка от источника (manufactured solution) -----
         if (with_source) {
@@ -220,24 +207,21 @@ void dg_step(DG_Solution& u, double dt, double time, bool with_source) {
     DG_Solution u1 = u;  // копия
     std::vector<double> dmean, dslope;
 
-    // Этап 1
     compute_dg_rhs(u, dmean, dslope, with_source, time);
     for (int j = 0; j < u.M; ++j) {
         u1.u_mean[j] = u.u_mean[j] + dt * dmean[j];
         u1.u_slope[j] = u.u_slope[j] + dt * dslope[j];
     }
-    apply_limiter(u1);
+    // apply_limiter(u1);
 
-    // Этап 2
     DG_Solution u2 = u1;
     compute_dg_rhs(u1, dmean, dslope, with_source, time + dt);
     for (int j = 0; j < u.M; ++j) {
         u2.u_mean[j] = 0.75 * u.u_mean[j] + 0.25 * u1.u_mean[j] + 0.25 * dt * dmean[j];
         u2.u_slope[j] = 0.75 * u.u_slope[j] + 0.25 * u1.u_slope[j] + 0.25 * dt * dslope[j];
     }
-    apply_limiter(u2);
+    // apply_limiter(u2);
 
-    // Этап 3
     compute_dg_rhs(u2, dmean, dslope, with_source, time + 0.5 * dt);
     for (int j = 0; j < u.M; ++j) {
         u.u_mean[j] =
@@ -245,7 +229,7 @@ void dg_step(DG_Solution& u, double dt, double time, bool with_source) {
         u.u_slope[j] =
             (1.0 / 3.0) * u.u_slope[j] + (2.0 / 3.0) * u2.u_slope[j] + (2.0 / 3.0) * dt * dslope[j];
     }
-    apply_limiter(u);
+    // apply_limiter(u);
 }
 
 // ----------------------------------------------------------------------
@@ -280,7 +264,7 @@ int main() {
         }
     }
 
-    std::cout << "\nFinal errors at t=" << T << ": L2=" << compute_L2_error(u, T)
+    std::cout << "\n" << N << "  " << M << "    " << "Final errors at t=" << T << ": L2=" << compute_L2_error(u, T)
               << " Linf=" << compute_Linf_error(u, T) << std::endl;
 
     return 0;
