@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -15,15 +16,112 @@ struct common_params {
         : N(_N), tau(_tau), M(_M), h(_X / _M), X(_X) {}
 };
 
-int function_type = 0;
+void plot_two(const std::vector<double>& x, const std::vector<double>& y1,
+              const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        dataFile << x[i] << " " << y1[i] << " " << y2[i] << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), "graph_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; set output '%s'; plot 'data.txt' "
+             "using 1:2 with lines linewidth 3 title 'Numerical', 'data.txt' using 1:3 with lines "
+             "linewidth 3 title 'Exact'\"",
+             filename);
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
+
+void plot_error_log(const std::vector<double>& x, const std::vector<double>& y1,
+                    const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        // Защита от log(0)
+        if (error < 0.0000001) error = 0.0000001;
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), "error_log_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; "
+             "set output '%s'; "
+             "set xlabel 'x'; "
+             "set ylabel '|Numerical - Exact|'; "
+             "set title 'Absolute Error (log scale)'; "
+             "set grid; "
+             "set logscale y; "
+             "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"",
+             filename);
+
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
+
+void plot_error(const std::vector<double>& x, const std::vector<double>& y1,
+                const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[128];
+    snprintf(filename, sizeof(filename), "error_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; "
+             "set output '%s'; "
+             "set xlabel 'x'; "
+             "set ylabel '|Numerical - Exact|'; "
+             "set title 'Absolute Error'; "
+             "set grid; "
+             "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"",
+             filename);
+
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
+
+int function_type = 1;
 
 // ----------------------------------------------------------------------
 // Точное решение (manufactured solution)
-// ----------------------------------------------------------------------
 double accuracy_u(double t, double x) {
     switch (function_type) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * PI * x));
+        case 1:
+            return (x > 0.2 && x < 0.4) ? 1 : 0;
     }
     return 0;
 }
@@ -31,12 +129,15 @@ double accuracy_u(double t, double x) {
 double accuracy_f(double t, double x) {
     // правая часть: du/dt + 0.5*d(u^2)/dx
     switch (function_type) {
-        case 0:
+        case 0: {
             double u = accuracy_u(t, x);
             double ut = u;  // производная по t совпадает с u
             double ux = -3 * PI * std::exp(t) * std::sin(3 * PI * x);
             double f_conv_x = u * ux;  // производная от 0.5 u^2
             return ut + f_conv_x;
+        }
+        case 1:
+            return 0;
     }
     return 0;
 }
@@ -232,9 +333,6 @@ void dg_step(DG_Solution& u, double dt, double time, bool with_source) {
     // apply_limiter(u);
 }
 
-// ----------------------------------------------------------------------
-// main
-// ----------------------------------------------------------------------
 int main() {
     double X = 1.0, T = 1.0;
     int N = 1000, M = 100;
@@ -249,8 +347,9 @@ int main() {
     DG_Solution u(M, h, X);
     u.set_initial(0.0);
 
-    std::cout << "Initial errors: L2=" << compute_L2_error(u, 0.0)
-              << " Linf=" << compute_Linf_error(u, 0.0) << "\n";
+    if (function_type != 1)
+        std::cout << "Initial errors: L2=" << compute_L2_error(u, 0.0)
+                  << " Linf=" << compute_Linf_error(u, 0.0) << "\n";
 
     bool with_source = true;  // manufactured solution
     double t = 0.0;
@@ -258,14 +357,35 @@ int main() {
         dg_step(u, dt, t, with_source);
         t += dt;
 
-        if (step % (N / 10) == 0) {
+        if (step % (N / 10) == 0 && function_type != 1) {
             std::cout << "Step " << step << " t=" << t << " L2=" << compute_L2_error(u, t)
                       << " Linf=" << compute_Linf_error(u, t) << "\n";
         }
     }
 
-    std::cout << "\n" << N << "  " << M << "    " << "Final errors at t=" << T << ": L2=" << compute_L2_error(u, T)
-              << " Linf=" << compute_Linf_error(u, T) << std::endl;
+    // ---------- строим графики ошибок ----------
+    std::vector<double> x_plot(M);
+    std::vector<double> num_plot(M);
+    std::vector<double> exact_plot(M);
+    std::vector<double> zero_plot(M);
+    for (int j = 0; j < M; ++j) {
+        x_plot[j] = (j + 0.5) * h;  // центры элементов
+        num_plot[j] = u.approx(x_plot[j]);
+        exact_plot[j] = accuracy_u(T, x_plot[j]);
+        zero_plot[j] = 0.0;
+    }
+
+    // plot_two(x_plot, num_plot, zero_plot, params, T);
+    plot_two(x_plot, num_plot, exact_plot, params, T);
+    if (function_type != 1) {
+        plot_error(x_plot, num_plot, exact_plot, params, T);
+        plot_error_log(x_plot, num_plot, exact_plot, params, T);
+
+        std::cout << "\n"
+                  << N << "  " << M << "    " << "Final errors at t=" << T
+                  << ": L2=" << compute_L2_error(u, T) << " Linf=" << compute_Linf_error(u, T)
+                  << std::endl;
+    }
 
     return 0;
 }
