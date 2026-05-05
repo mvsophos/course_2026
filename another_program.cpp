@@ -1,14 +1,9 @@
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <vector>
-
-class phi {};
-
-// надо нормальную функцию написать. Может быть вообще сделать сначала чисто метод конечных
-// элементов на один элемент, то есть на кусочно-постоянных функциях
-
-// РЕШАЕМ УРАВНЕНИЕ БЮРГЕРСА ВИДА:       du/dt  +  0.5 * d(u^2)/dx  =  0
 
 struct common_params {
     double tau, h;
@@ -18,7 +13,111 @@ struct common_params {
     common_params(int _N, double _tau, int _M, double _h) : N(_N), tau(_tau), M(_M), h(_h) {}
 
     ~common_params() = default;
+
+    std::vector<double> get_vector_OX() {
+        std::vector<double> x;
+        for (int i = 0; i <= M; i++) x.push_back(i * h);
+        return x;
+    }
 };
+
+// РЕШАЕМ УРАВНЕНИЕ БЮРГЕРСА ВИДА:       du/dt  +  0.5 * d(u^2)/dx  =  0
+
+void plot_two(const std::vector<double>& x, const std::vector<double>& y1,
+              const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        dataFile << x[i] << " " << y1[i] << " " << y2[i] << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), "graph_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; set output '%s'; plot 'data.txt' "
+             "using 1:2 with lines linewidth 3 title 'Numerical', 'data.txt' using 1:3 with lines "
+             "linewidth 3 title 'Exact'\"",
+             filename);
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
+
+void plot_error_log(const std::vector<double>& x, const std::vector<double>& y1,
+                    const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        // Защита от log(0)
+        if (error < 0.0000001) error = 0.0000001;
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), "error_log_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; "
+             "set output '%s'; "
+             "set xlabel 'x'; "
+             "set ylabel '|Numerical - Exact|'; "
+             "set title 'Absolute Error (log scale)'; "
+             "set grid; "
+             "set logscale y; "
+             "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"",
+             filename);
+
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
+
+void plot_error(const std::vector<double>& x, const std::vector<double>& y1,
+                const std::vector<double>& y2, const common_params& params, double time = -1) {
+    std::ofstream dataFile("data.txt");
+    for (size_t i = 0; i < x.size(); ++i) {
+        double error = std::abs(y1[i] - y2[i]);
+        dataFile << x[i] << " " << error << std::endl;
+    }
+    dataFile.close();
+
+    if (time < 0) time = params.tau * params.N;
+
+    char filename[128];
+    snprintf(filename, sizeof(filename), "error_another_N=%d_M=%d_T=%lf_X=%lf.png", params.N,
+             params.M, time, params.h * params.M);
+
+    char command[512];
+    snprintf(command, sizeof(command),
+             "gnuplot -e \"set terminal png size 1200,800; "
+             "set output '%s'; "
+             "set xlabel 'x'; "
+             "set ylabel '|Numerical - Exact|'; "
+             "set title 'Absolute Error'; "
+             "set grid; "
+             "plot 'data.txt' using 1:2 with lines linewidth 3 title 'Error'\"",
+             filename);
+
+    system(command);
+
+    char open_command[512];
+    snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
+    system(open_command);
+}
 
 double eps = 1e-12;
 
@@ -29,6 +128,12 @@ double accuracy_right_part(double t, double x) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * M_PI * x)) *
                    (1 - 3 * M_PI * std::exp(t) * std::sin(3 * M_PI * x));
+        case 1:
+            return (x > 0.2 && x < 0.4) ? 1 : 0;
+        case 2:
+            return 1 + x + t;
+        case 3:
+            return x * x * (1 + 2 * t * t * x);
     }
     return 0;
 }
@@ -37,6 +142,12 @@ double accuracy_u(double t, double x) {
     switch (function_type) {
         case 0:
             return std::exp(t) * (1.5 + std::cos(3 * M_PI * x));
+        case 1:
+            return 0;
+        case 2:
+            return x + t;
+        case 3:
+            return t * x * x;
     }
     return 0;
 }
@@ -105,11 +216,58 @@ class func {
 
 
 
+// --- Ограничитель наклонов (TVBM minmod) ---
+double minmod(double a, double b, double c) {
+    if (a > 0 && b > 0 && c > 0) return std::min(a, std::min(b, c));
+    if (a < 0 && b < 0 && c < 0) return std::max(a, std::max(b, c)); // все отрицательные -> ближайшее к нулю
+    return 0.0;
+}
+
+void apply_slope_limiter(func& u, const common_params& p) {
+    const double h = p.h;
+    const double M_tvb = 100.0;   // оценка второй производной (для тестовой задачи)
+    std::vector<double> limited = u.c_i; // копия
+
+    for (int i = 1; i < p.M; ++i) {
+        double uL = u.c_i[i-1], uC = u.c_i[i], uR = u.c_i[i+1];
+
+        // центральная разность и односторонние
+        double d_center = (uR - uL) / 2.0;
+        double d_left   = uC - uL;
+        double d_right  = uR - uC;
+
+        // TVBM minmod
+        double d_limited;
+        if (std::abs(d_center) <= M_tvb * h * h) {
+            d_limited = d_center; // сохраняем точность в экстремумах
+        } else {
+            d_limited = minmod(d_center, d_left, d_right);
+        }
+
+        // Восстанавливаем значение в узле i так, чтобы наклон на левом и правом элементах
+        // соответствовал ограниченной центральной разности.
+        // Мы просто заменяем u_i на (u_{i+1} + u_{i-1})/2 - (d_limited * h)/2? 
+        // Несколько сложнее - сохраним среднее значение на элементе, но для непрерывного Галёркина
+        // проще всего скорректировать u_i, чтобы подавить осцилляции.
+        // Используем подход: u_i^{new} = u_i, если ограниченный наклон совпадает с центральным,
+        // иначе сглаживаем.
+        if (std::abs(d_limited - d_center) > 1e-12) {
+            // ограничитель сработал — заменяем u_i на (u_{i-1} + u_{i+1})/2 
+            // (обнуляем вторую производную)
+            limited[i] = (uL + uR) / 2.0;
+        }
+    }
+
+    u.c_i.swap(limited);
+}
+
+
+
 // Ошибка в норме L∞ (maximum norm)
 double compute_L_inf_error(const func& numerical, double time) {
     double max_error = 0.0;
     const common_params& p = numerical.m_params;
-    
+
     for (int i = 0; i <= p.M; i++) {
         double exact = accuracy_u(time, i * p.h);
         double error = std::abs(numerical.c_i[i] - exact);
@@ -123,11 +281,11 @@ double compute_L_inf_error(const func& numerical, double time) {
 double compute_L1_error(const func& numerical, double time) {
     const common_params& p = numerical.m_params;
     double sum = 0.0;
-    
+
     for (int i = 0; i <= p.M; i++) {
         double exact = accuracy_u(time, i * p.h);
         double error = std::abs(numerical.c_i[i] - exact);
-        
+
         if (i == 0 || i == p.M)
             sum += error / 2.0;
         else
@@ -142,7 +300,7 @@ double compute_L1_error(const func& numerical, double time) {
 double compute_L2_error(const func& numerical, double time) {
     const common_params& p = numerical.m_params;
     double integral_sq = 0.0;
-    
+
     // Интегрируем по каждому элементу точно
     for (int i = 0; i < p.M; i++) {
         // Значения ошибки в узлах i и i+1
@@ -150,15 +308,15 @@ double compute_L2_error(const func& numerical, double time) {
         double uR_num = numerical.c_i[i + 1];
         double uL_ex = accuracy_u(time, i * p.h);
         double uR_ex = accuracy_u(time, (i + 1) * p.h);
-        
+
         double eL = uL_num - uL_ex;
         double eR = uR_num - uR_ex;
-        
+
         // Точный интеграл от (eL*(1-ξ) + eR*ξ)² по элементу длины h
         // ∫₀¹ (eL(1-ξ) + eRξ)² h dξ = h*(eL² + eL*eR + eR²)/3
-        integral_sq += (p.h / 3.0) * (eL*eL + eL*eR + eR*eR);
+        integral_sq += (p.h / 3.0) * (eL * eL + eL * eR + eR * eR);
     }
-    
+
     return std::sqrt(integral_sq);
 }
 
@@ -167,20 +325,19 @@ void print_all_errors(const func& numerical, double time) {
     double L_inf = compute_L_inf_error(numerical, time);
     double L1 = compute_L1_error(numerical, time);
     double L2 = compute_L2_error(numerical, time);
-    
+
     std::cout << " (t = " << time << "): "
               << "L_inf = " << L_inf << ", "
               << "L1 = " << L1 << ", "
               << "L2 = " << L2 << "\n";
 }
 
-
 struct equation {
     int num_of_eq = -1;
-    double below_diag;
-    double onthe_diag;
-    double above_diag;
-    double right_part;
+    double below_diag = 0;
+    double onthe_diag = 0;
+    double above_diag = 0;
+    double right_part = 0;
 
     const common_params& m_params;
 
@@ -229,7 +386,6 @@ struct equation {
         above_diag = 0;
         right_part = 0;
 
-
         // мб лучше задать точное решение на границе, вместо коэффициентов на диагонали.
         // Это будет лучше
         if (num == 0 || num == M) {
@@ -238,8 +394,8 @@ struct equation {
             return;
         }
 
-        /* if (num == 0) onthe_diag -= 0.5 * u.c_i[num] * tau;
-        if (num == M) onthe_diag += 0.5 * u.c_i[num] * tau; */
+        /* if (num == 0) onthe_diag -= 0.5 * u.c_i[num] * (tau);
+        if (num == M) onthe_diag += 0.5 * u.c_i[num] * (tau); */
 
         if (num != 0) below_diag = h / 6;
         if (num != M) above_diag = h / 6;
@@ -256,8 +412,8 @@ struct equation {
         }
 
         if (is_default)
-            right_part += tau * simpson_integral(accuracy_right_part, num, (time_step + 1) * m_params.tau,
-                                           m_params);
+            right_part += tau * simpson_integral(accuracy_right_part, num,
+                                                 (time_step + 1) * m_params.tau, m_params);
 
         if (num != 0) right_part += (h / 6) * (2 * u.c_i[num] + u.c_i[num - 1]);
         if (num != M) right_part += (h / 6) * (2 * u.c_i[num] + u.c_i[num + 1]);
@@ -360,14 +516,16 @@ func solver_of_matrix(std::vector<equation>& matrix, const common_params& parame
         eq_below_is_eq_below_minus_eq_above(matrix[i + 1], matrix[i], true);
     }
 
-    // matrix[M].normalize_eq();
+    matrix[M].right_part /= matrix[M].onthe_diag;
+    matrix[M].onthe_diag = 1.;
 
     for (int i = M; i > 0; i--) {
-        matrix[i].normalize_eq(false);
+        matrix[i].right_part /= matrix[i].onthe_diag;
+        matrix[i].onthe_diag = 1.;
         eq_below_is_eq_below_minus_eq_above(matrix[i - 1], matrix[i], false);
     }
 
-    matrix[0].normalize_eq(false);
+    matrix[0].right_part /= matrix[0].onthe_diag;
 
     std::vector<double> next_approx;
     for (int i = 0; i <= M; i++) {
@@ -389,8 +547,8 @@ int main() {
         // одну больше, так как считаем с 0)
 
         std::cout << "Введи аргументы в таком порядке:  N шагов по времени,  T отрезок времени,  M "
-                     "шагов по пространству,  X отрезок пространства.\n";
-        std::cin >> N >> T >> M >> X;
+                     "шагов по пространству,  X отрезок пространства,  TYPE - тип функции.\n";
+        std::cin >> N >> T >> M >> X >> function_type;
 
         double tau = T / N, h = X / M;
 
@@ -416,20 +574,41 @@ int main() {
 
             // тут решаем матрицу и заменяем приближение на правую часть матрицы
             u = solver_of_matrix(matrix, params);
+            //apply_slope_limiter(u, params);
+
             // тут запишем решение задачи в какой-то файл. Наверное, в виде трехмерной поверхности
             // (время / пространство / значение функции)
             if (time_step == 0 && false) {
                 std::cout << "\n Первое уравнение \n";
                 print_diff_vector(u.c_i,
-                                  func(init_vector_of_function_u_value(1, params), params).c_i);
+                                  func(init_vector_of_function_u_value(T, params), params).c_i);
                 std::cout << "\n\n";
             }
         }
-        //print_diff_vector(u.c_i, func(init_vector_of_function_u_value(N, params), params).c_i);
 
         std::cout << "\nОшибки\n";
         print_all_errors(u, N * params.tau);
         print_all_errors(u, T);
+
+        // Сохраняем данные для построения графиков
+        std::ofstream dataFile("numerical_solution.txt");
+        dataFile << "# x_center   numerical   exact" << std::endl;
+        for (int i = 0; i < M; i++) {
+            double x_center = (i + 0.5) * h;
+            dataFile << x_center << " " << u.c_i[i] << " "
+                     << func(init_vector_of_function_u_value(T, params), params).c_i[i]
+                     << std::endl;
+        }
+        dataFile.close();
+
+        plot_two(params.get_vector_OX(), u.c_i,
+                 func(init_vector_of_function_u_value(N, params), params).c_i, params);
+
+        plot_error_log(params.get_vector_OX(), u.c_i,
+                       func(init_vector_of_function_u_value(N, params), params).c_i, params);
+
+        plot_error(params.get_vector_OX(), u.c_i,
+                   func(init_vector_of_function_u_value(N, params), params).c_i, params);
 
     } catch (int e) {
         switch (e) {
