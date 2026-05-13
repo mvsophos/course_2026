@@ -38,9 +38,9 @@ void plot_two(const std::vector<double>& x, const std::vector<double>& y1,
              filename);
     system(command);
 
-    char open_command[512];
+    /* char open_command[512];
     snprintf(open_command, sizeof(open_command), "xdg-open '%s' 2>/dev/null &", filename);
-    system(open_command);
+    system(open_command); */
 }
 
 void plot_error_log(const std::vector<double>& x, const std::vector<double>& y1,
@@ -112,16 +112,21 @@ void plot_error(const std::vector<double>& x, const std::vector<double>& y1,
     system(open_command);
 }
 
-int function_type = 1;
+int function_type = 2;
 
 // ----------------------------------------------------------------------
 // Точное решение (manufactured solution)
 double accuracy_u(double t, double x) {
     switch (function_type) {
-        case 0:
-            return std::exp(t) * (1.5 + std::cos(3 * PI * x));
+        case 0: {
+            //double plus_x = (x > 0.55 && x < 0.57) ? 0.1 : 0.;
+            double plus_x = 0.;
+            return std::exp(t) * (1.5 + std::cos(3 * PI * x)) + plus_x;
+        }
         case 1:
             return (x > 0.2 && x < 0.4) ? 1 : 0;
+        case 2:
+            return std::exp(t + std::sin(x));
     }
     return 0;
 }
@@ -138,12 +143,13 @@ double accuracy_f(double t, double x) {
         }
         case 1:
             return 0;
+        case 2:
+            return accuracy_u(t, x) * (1 + std::cos(x) * accuracy_u(t, x));
     }
     return 0;
 }
 
-// ----------------------------------------------------------------------
-// Класс для хранения DG-решения (кусочно-линейное)
+// Класс для хранения DG
 class DG_Solution {
    public:
     std::vector<double> u_mean;   // средние значения по элементам
@@ -179,8 +185,14 @@ class DG_Solution {
     }
 };
 
-// ----------------------------------------------------------------------
-// Функции ошибок (адаптированы для DG_Solution)
+double compute_L1_error(const DG_Solution& sol, double time) {
+    double integral = 0.0;
+    for (int j = 0; j < sol.M; ++j) {
+        integral += std::abs(sol.approx(j * sol.h) - accuracy_u(time, j * sol.h));
+    }
+    return integral * sol.h;
+}
+
 double compute_L2_error(const DG_Solution& sol, double time) {
     double integral = 0.0;
     for (int j = 0; j < sol.M; ++j) {
@@ -205,7 +217,6 @@ double compute_Linf_error(const DG_Solution& sol, double time) {
     return max_err;
 }
 
-// ----------------------------------------------------------------------
 // Численный поток (локальный Лакса-Фридрихса)
 double llf_flux(double uL, double uR) {
     double fL = 0.5 * uL * uL;
@@ -214,7 +225,6 @@ double llf_flux(double uL, double uR) {
     return 0.5 * (fL + fR) - 0.5 * C * (uR - uL);
 }
 
-// ----------------------------------------------------------------------
 // Вычисление правых частей для DG P1
 void compute_dg_rhs(const DG_Solution& u, std::vector<double>& dmean, std::vector<double>& dslope,
                     bool with_source, double time) {
@@ -237,14 +247,12 @@ void compute_dg_rhs(const DG_Solution& u, std::vector<double>& dmean, std::vecto
         double flux_left = llf_flux(u_ext_left, u_left);
         double flux_right = llf_flux(u_right, u_ext_right);
 
-        // Уравнение для среднего (без источника)
         dmean[j] = -(flux_right - flux_left) / h;
 
         // Интеграл от 0.5*u^2 внутри элемента
         double integral_f =
             0.5 * h * (u.u_mean[j] * u.u_mean[j] + u.u_slope[j] * u.u_slope[j] / 3.0);
 
-        // Уравнение для наклона (без источника)
         dslope[j] = -3.0 / h * ((flux_right + flux_left) - 2.0 / h * integral_f);
 
         // ----- добавка от источника (manufactured solution) -----
@@ -254,20 +262,17 @@ void compute_dg_rhs(const DG_Solution& u, std::vector<double>& dmean, std::vecto
             double fL = accuracy_f(time, xL);
             double fR = accuracy_f(time, xR);
 
-            // Источник для среднего: ∫ f φ₀ dx / h  (точное интегрирование для линейной f)
+            // Источник для среднего: ∫ f φ_0 dx / h  (точное интегрирование для линейной f)
             // даёт среднее арифметическое на концах
             dmean[j] += 0.5 * (fL + fR);
 
             // Источник для наклона: (3/h) * ∫ f φ₁ dx   (аналитически для линейной f)
-            // ∫ f φ₁ dx = (h/2)*(fR - fL)/3 → после умножения на (3/h) получаем (fR - fL)/2
+            // ∫ f φ_1 dx = (h/2)*(fR - fL)/3 → после умножения на (3/h) получаем (fR - fL)/2
             dslope[j] += 0.5 * (fR - fL);
         }
     }
 }
 
-// ----------------------------------------------------------------------
-// Ограничитель minmod (с TVB-модификацией)
-// ----------------------------------------------------------------------
 double minmod(double a, double b, double c) {
     if (a > 0.0 && b > 0.0 && c > 0.0) return std::min({a, b, c});
     if (a < 0.0 && b < 0.0 && c < 0.0) return std::max({a, b, c});
@@ -301,9 +306,7 @@ void apply_limiter(DG_Solution& u, bool TVB = true, double M_tvb = 50.0) {
     u.u_slope = new_slope;
 }
 
-// ----------------------------------------------------------------------
 // Один шаг SSP RK3 (TVD RK3)
-// ----------------------------------------------------------------------
 void dg_step(DG_Solution& u, double dt, double time, bool with_source) {
     DG_Solution u1 = u;  // копия
     std::vector<double> dmean, dslope;
@@ -351,7 +354,7 @@ int main() {
         std::cout << "Initial errors: L2=" << compute_L2_error(u, 0.0)
                   << " Linf=" << compute_Linf_error(u, 0.0) << "\n";
 
-    bool with_source = true;  // manufactured solution
+    bool with_source = true;
     double t = 0.0;
     for (int step = 0; step < N; ++step) {
         dg_step(u, dt, t, with_source);
@@ -360,6 +363,20 @@ int main() {
         if (step % (N / 10) == 0 && function_type != 1) {
             std::cout << "Step " << step << " t=" << t << " L2=" << compute_L2_error(u, t)
                       << " Linf=" << compute_Linf_error(u, t) << "\n";
+        }
+
+        if (step % (N / 60) == 0) {
+            std::vector<double> x_plot(M);
+            std::vector<double> num_plot(M);
+            std::vector<double> exact_plot(M);
+            std::vector<double> zero_plot(M);
+            for (int j = 0; j < M; ++j) {
+                x_plot[j] = (j + 0.5) * h;  // центры элементов
+                num_plot[j] = u.approx(x_plot[j]);
+                exact_plot[j] = accuracy_u(step * dt, x_plot[j]);
+                zero_plot[j] = 0.0;
+            }
+            plot_two(x_plot, num_plot, exact_plot, params, step * dt);
         }
     }
 
@@ -375,15 +392,21 @@ int main() {
         zero_plot[j] = 0.0;
     }
 
+    std::vector<double> x_xxx(M);
+    double summa_int = 0;
+    for (auto it : num_plot)
+        summa_int += it;
+    std::cout << summa_int * h << " сумма \n";
+
     // plot_two(x_plot, num_plot, zero_plot, params, T);
     plot_two(x_plot, num_plot, exact_plot, params, T);
     if (function_type != 1) {
-        plot_error(x_plot, num_plot, exact_plot, params, T);
-        plot_error_log(x_plot, num_plot, exact_plot, params, T);
+        /* plot_error(x_plot, num_plot, exact_plot, params, T);
+        plot_error_log(x_plot, num_plot, exact_plot, params, T); */
 
         std::cout << "\n"
-                  << N << "  " << M << "    " << "Final errors at t=" << T
-                  << ": L2=" << compute_L2_error(u, T) << " Linf=" << compute_Linf_error(u, T)
+                  << N << " & " << M << "  &  " << compute_L1_error(u, T)
+                  << "  & " << compute_L2_error(u, T) << " & " << compute_Linf_error(u, T)
                   << std::endl;
     }
 

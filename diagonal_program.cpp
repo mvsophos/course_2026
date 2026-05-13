@@ -183,6 +183,7 @@ void print_diff_vector(std::vector<double> func, std::vector<double> accuracy_fu
 //
 
 double flow_from(double a, double b) {
+    //return 0;
     return 0.25 * (a * a + b * b) - 0.5 * std::max(std::abs(a), std::abs(b)) * (b - a);
 }
 
@@ -276,9 +277,11 @@ int main() {
         }
         L2 = std::sqrt(L2);
 
-        std::cout << "L1-норма ошибки:    " << L1 << std::endl;
+        /* std::cout << "L1-норма ошибки:    " << L1 << std::endl;
         std::cout << "L2-норма ошибки:    " << L2 << std::endl;
-        std::cout << "L_inf-норма ошибки: " << Linf << std::endl;
+        std::cout << "L_inf-норма ошибки: " << Linf << std::endl; */
+
+        std::cout << " & " << L1 << " & " << L2 << " & " << Linf << "\n";
 
         // Сохраняем данные для построения графиков
         std::ofstream dataFile("numerical_solution.txt");

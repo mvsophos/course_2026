@@ -121,7 +121,9 @@ void plot_error(const std::vector<double>& x, const std::vector<double>& y1,
 
 double eps = 1e-12;
 
-int function_type = 0;
+int function_type = 1;
+
+double accuracy_u(double t, double x);
 
 double accuracy_right_part(double t, double x) {
     switch (function_type) {
@@ -134,20 +136,26 @@ double accuracy_right_part(double t, double x) {
             return 1 + x + t;
         case 3:
             return x * x * (1 + 2 * t * t * x);
+        case 10:
+            return accuracy_u(t, x) * (1 + std::cos(x) * accuracy_u(t, x));
     }
     return 0;
 }
 
 double accuracy_u(double t, double x) {
     switch (function_type) {
-        case 0:
-            return std::exp(t) * (1.5 + std::cos(3 * M_PI * x));
+        case 0: {
+            double plus_x = (x > 0.55 && x < 0.57) ? 0.1 : 0.;
+            return std::exp(t) * (1.5 + std::cos(3 * M_PI * x)) + plus_x;
+        }
         case 1:
             return 0;
         case 2:
             return x + t;
         case 3:
             return t * x * x;
+        case 10:
+            return std::exp(t + std::sin(x));
     }
     return 0;
 }
@@ -327,9 +335,9 @@ void print_all_errors(const func& numerical, double time) {
     double L2 = compute_L2_error(numerical, time);
 
     std::cout << " (t = " << time << "): "
-              << "L_inf = " << L_inf << ", "
-              << "L1 = " << L1 << ", "
-              << "L2 = " << L2 << "\n";
+              << " & " << L1 << " "
+              << " & " << L2 << " "
+              << " & " << L_inf << "\n";
 }
 
 struct equation {
@@ -601,14 +609,14 @@ int main() {
         }
         dataFile.close();
 
-        plot_two(params.get_vector_OX(), u.c_i,
+        /* plot_two(params.get_vector_OX(), u.c_i,
                  func(init_vector_of_function_u_value(N, params), params).c_i, params);
 
         plot_error_log(params.get_vector_OX(), u.c_i,
                        func(init_vector_of_function_u_value(N, params), params).c_i, params);
 
         plot_error(params.get_vector_OX(), u.c_i,
-                   func(init_vector_of_function_u_value(N, params), params).c_i, params);
+                   func(init_vector_of_function_u_value(N, params), params).c_i, params); */
 
     } catch (int e) {
         switch (e) {

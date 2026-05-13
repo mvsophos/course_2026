@@ -5,6 +5,7 @@
             "name": "Launch with LLDB",
             "type": "lldb",
             "request": "launch",
+            //"program": "${workspaceFolder}/diagonal_program.out",
             //"program": "${workspaceFolder}/another_program.out",
             "program": "${workspaceFolder}/part_linear.out",
             "args": [],
